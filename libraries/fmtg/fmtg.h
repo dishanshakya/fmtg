@@ -3,60 +3,49 @@
 #ifndef FMTG
 #define FMTG
 
+#include <RF24.h>
+#include <SPI.h>
 #include "ecc.h"
-#include "constants.h"
 
-#define ADDR_S 2
-
-const byte BROADCAST_ADDR[2] = "ff";
+const byte addr[ADDR_S];
 
 // An FMTG packet structure
 typedef struct{
-  byte src[2];		// Source Address
-  byte dst[2];		// Destination Address
-  byte is[2];		// Intermediate Sender
-  byte ir[2];		// Intermediate Receiver
-  byte type;		// Type of packet (P_DISC, P_ACK, P_DAT)
-  uint16_t hop;		// Hop count
-  byte payload[21];
+    byte src[ADDR_S];		// Source Address
+    byte dst[ADDR_S];		// Destination Address
+    byte is[ADDR_S];		// Intermediate Sender
+    byte ir[ADDR_S];		// Intermediate Receiver
+    byte type;			// Type of packet (P_DISC, P_ACK, P_DAT)
+    uint16_t hop;			// Hop count
+    byte payload[PAYLOAD_S];
 } fmtg;
 
-fmtg construct_discovery(byte dst[2], uint16_t hop){
+
+fmtg construct_discovery(byte dst[ADDR_S]){
 	fmtg packet;
 	memcpy(packet.src, addr, ADDR_S); 
 	memcpy(packet.dst, dst, ADDR_S); 
 	memcpy(packet.is, addr, ADDR_S); 
 	memcpy(packet.ir, BROADCAST_ADDR, ADDR_S);
-       	packet.type = P_DISC;
+    packet.type = P_DISC;
 	packet.hop = 0;
-	packet.payload[0] = '\0';
+	memset(packet.payload, 0x00, PAYLOAD_S);
 	return packet;
 }
 
 fmtg construct_ack(fmtg* discovery)
 {
 	fmtg packet;
-	memcpy(packet.src, discovery.dst, ADDR_S); 
-	memcpy(packet.dst, discovery.src, ADDR_S); 
+	memcpy(packet.src, discovery->dst, ADDR_S); 
+	memcpy(packet.dst, discovery->src, ADDR_S); 
 	memcpy(packet.is, addr, ADDR_S); 
-	memcpy(packet.ir, discovery.is, ADDR_S);
-       	packet.type = 'A';
-	packet.payload[0] = '\0';
+	memcpy(packet.ir, discovery->is, ADDR_S);
+    packet.type = P_ACK;
+    packet.hop = 0;
+	memset(packet.payload, 0x00, PAYLOAD_S);
 	return packet;
 }
 
-void printp(fmtg packet)
-{
-	char buff[3];
-	char payload[17];
-	buff[2] = '\0';
-	payload[16] = '\0';
-	Serial.print("Src: "); Serial.println((char*)memcpy(buff, packet.src, ADDR_S));
-	Serial.print("Dst: ");Serial.println((char*)memcpy(buff, packet.dst, ADDR_S));
-	Serial.print("Isnd: ");Serial.println((char*)memcpy(buff, packet.is, ADDR_S));
-	Serial.print("Irecv: ");Serial.println((char*)memcpy(buff, packet.ir, ADDR_S));
-	Serial.print("Type: ");Serial.println((char)packet.type);
-	Serial.print("Hop: ");Serial.println((int)packet.hop);
-	Serial.print("Payload: ");Serial.println((char*)memcpy(payload, packet.payload, 16));
-}
+
+
 #endif
