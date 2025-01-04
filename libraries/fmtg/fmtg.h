@@ -1,38 +1,45 @@
+/* FMTG Protocol Library */
+
 #ifndef FMTG
 #define FMTG
-//library for FMTG protocol
+
+#include "ecc.h"
+#include "constants.h"
+
 #define ADDR_S 2
 
+const byte BROADCAST_ADDR[2] = "ff";
+
+// An FMTG packet structure
 typedef struct{
-  byte src[3];
-  byte dst[3];
-  byte is[3];
-  byte ir[3];
-  byte type;
-  uint16_t hop;
-  byte payload[16];
+  byte src[2];		// Source Address
+  byte dst[2];		// Destination Address
+  byte is[2];		// Intermediate Sender
+  byte ir[2];		// Intermediate Receiver
+  byte type;		// Type of packet (P_DISC, P_ACK, P_DAT)
+  uint16_t hop;		// Hop count
+  byte payload[21];
 } fmtg;
 
-fmtg construct_discovery(byte src[2], byte dst[2], uint16_t hop){
+fmtg construct_discovery(byte dst[2], uint16_t hop){
 	fmtg packet;
-	memcpy(packet.src, src, ADDR_S); 
+	memcpy(packet.src, addr, ADDR_S); 
 	memcpy(packet.dst, dst, ADDR_S); 
-	memcpy(packet.is, src, ADDR_S); 
-	memcpy(packet.ir, "ff", ADDR_S);
-       	packet.type = 'D';
-	packet.hop = hop;
+	memcpy(packet.is, addr, ADDR_S); 
+	memcpy(packet.ir, BROADCAST_ADDR, ADDR_S);
+       	packet.type = P_DISC;
+	packet.hop = 0;
 	packet.payload[0] = '\0';
 	return packet;
-
 }
 
-fmtg construct_ack(byte src[], byte dst[], byte iReceiver[])
+fmtg construct_ack(fmtg* discovery)
 {
 	fmtg packet;
-	memcpy(packet.src, src, ADDR_S); 
-	memcpy(packet.dst, dst, ADDR_S); 
-	memcpy(packet.is, src, ADDR_S); 
-	memcpy(packet.ir, iReceiver, ADDR_S);
+	memcpy(packet.src, discovery.dst, ADDR_S); 
+	memcpy(packet.dst, discovery.src, ADDR_S); 
+	memcpy(packet.is, addr, ADDR_S); 
+	memcpy(packet.ir, discovery.is, ADDR_S);
        	packet.type = 'A';
 	packet.payload[0] = '\0';
 	return packet;
