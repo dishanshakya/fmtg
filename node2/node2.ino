@@ -5,31 +5,45 @@
 #include <fmtg.h>
 #include <utils.h>
 #include <routing.h>
+#include <ecc.h>
 
 RF24 transmitter(2,3);
 RF24 receiver(4,5); // new bootloader arduino
 
 void handleRecipient(fmtg *packet){
-  switch(packet->type){
-    case P_DISC:
+  if(packet->type == P_DISC){
     Serial.println("received a discovery, sending ack");
     fmtg ack = construct_ack(packet);
-    printp(ack);
-    unicast(&transmitter, packet);
-    break;
-
-    case P_ACK:
-    Serial.print("Found recepient!");
-    break;
-
-    case P_DAT:
-    break;
+    unicast(&transmitter, &ack);
+  } else if(packet->type == P_ACK){
+    Serial.println("Received ack, found recepient!");
   }
+  // switch(packet->type){
+  //   case P_DISC:
+  //   Serial.println("received a discovery, sending ack");
+  //   fmtg ack = construct_ack(packet);
+  //   printp(ack);
+  //   unicast(&transmitter, &ack);
+  //   break;
+
+  //   case 65:
+  //   Serial.println("Found recepient!");
+  //   break;
+
+  //   case P_DAT:
+  //   break;
+
+  //   default:
+  //   Serial.println("wtf?");
+  //   break;
+  // }
 }
 
 void setup() {
 
-  assign_address(addr_n2);
+  assign_address(addr_n2); 
+  
+  initRoutingTable();
   
   transmitter.begin();
   receiver.begin();
@@ -54,6 +68,9 @@ void setup() {
 
   // transmitter.printDetails();
   // receiver.printDetails();  
+
+  fmtg discovery = construct_discovery(addr_n3);
+  broadcast(&transmitter, &receiver, &discovery);
   
 }
 

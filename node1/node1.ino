@@ -5,31 +5,31 @@
 #include <fmtg.h>
 #include <utils.h>
 #include <routing.h>
+#include <ecc.h>
 
 RF24 transmitter(2,3);
 RF24 receiver(5,4); // old bootloader arduino
 
 void handleRecipient(fmtg *packet){
-  switch(packet->type){
-    case P_DISC:
+
+  if(packet->type == P_DISC){
     Serial.println("received a discovery, sending ack");
     fmtg ack = construct_ack(packet);
-    printp(ack);
-    unicast(&transmitter, packet);
-    break;
-
-    case P_ACK:
-    Serial.print("Found recepient!");
-    break;
-
-    case P_DAT:
-    break;
+    unicast(&transmitter, &ack);
+  } else if(packet->type == P_ACK){
+    Serial.println("Received ack, found recepient!");
   }
+}
+
+void handleReceiver(fmtg *packet){
+  relay(&transmitter, &receiver, packet);
 }
 
 void setup() {
 
   assign_address(addr_n1);
+
+  initRoutingTable();
   
   transmitter.begin();
   receiver.begin();
@@ -57,7 +57,7 @@ void setup() {
   // receiver.printDetails();  
 
   fmtg discovery = construct_discovery(addr_n2);
-  broadcast(&transmitter, &discovery);
+  broadcast(&transmitter, &receiver, &discovery);
   
   
 }
@@ -67,12 +67,12 @@ void loop() {
   if (receiver.available())
   {
     receiver.read(&packet, sizeof(fmtg));
+    insertEntry(&packet);
     if(!memcmp(packet.dst, addr, ADDR_S)){
       handleRecipient(&packet);
-    } else if(!memcmp(packet.ir, addr, ADDR_S)){
-      // handleReceiver(&packet);
     } else{
-      printp(packet);
+      handleReceiver(&packet);
+      // printp(packet);
       // nonReceiver(&packet);
     }
   }

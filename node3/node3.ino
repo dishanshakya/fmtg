@@ -3,61 +3,88 @@
 #include <nRF24L01.h>
 #include <printf.h>
 #include <fmtg.h>
+#include <utils.h>
+#include <routing.h>
 
 RF24 transmitter(2,3);
-RF24 receiver(4,5);
+RF24 receiver(4,5); // new bootloader arduino
 
-int c;
+void handleRecipient(fmtg *packet){
+  if(packet->type == P_DISC){
+    Serial.println("received a discovery, sending ack");
+    fmtg ack = construct_ack(packet);
+    unicast(&transmitter, &ack);
+  } else if(packet->type == P_ACK){
+    Serial.println("Received ack, found recepient!");
+  }
+  // switch(packet->type){
+  //   case P_DISC:
+  //   Serial.println("received a discovery, sending ack");
+  //   fmtg ack = construct_ack(packet);
+  //   printp(ack);
+  //   unicast(&transmitter, &ack);
+  //   break;
 
-void handleReceiver(fmtg* packet){}
+  //   case 65:
+  //   Serial.println("Found recepient!");
+  //   break;
 
-void handleRecepient(){}
+  //   case P_DAT:
+  //   break;
 
-void nonReceiver(){}
+  //   default:
+  //   Serial.println("wtf?");
+  //   break;
+  // }
+}
 
 void setup() {
+
+  assign_address(addr_n2);
   
   transmitter.begin();
   receiver.begin();
   Serial.begin(115200);
   printf_begin();
 
+  // 2mbps data rate
   transmitter.setDataRate(1);
   receiver.setDataRate(1);
+  
   transmitter.setCRCLength(2);
   transmitter.setPALevel(3);
 
-  receiver.openReadingPipe(0, addr);
-  receiver.openReadingPipe(1, BROADCAST_ADDR);
+  byte unicast_pipe[5];
+  byte broadcast_pipe[5];
+  memcpy(unicast_pipe, full_addr(addr), FULL_ADDR_S);
+  memcpy(broadcast_pipe, full_addr(BROADCAST_ADDR), FULL_ADDR_S);
+  receiver.openReadingPipe(0, unicast_pipe);
+  receiver.openReadingPipe(1, broadcast_pipe);
   receiver.startListening();
   transmitter.stopListening();
 
   // transmitter.printDetails();
-  // receiver.printDetails();
+  // receiver.printDetails();  
 
-  // byte dest[5] = "1100";
-  // byte ir[5] = "ff000";
-  // fmtg discovery = construct_discovery(dest);
-  // transmitter.openWritingPipe(dest);
-
-  // for(int i = 1; i <= 1000; i++){
-  //   transmitter.write(&discovery, sizeof(fmtg));
-  //   delay(100);
-  // }
-
-  c = 0;
-  
+  fmtg discovery = construct_discovery(addr_n1);
+  broadcast(&transmitter, &receiver, &discovery);
   
 }
 
 void loop() {
-  fmtg packet, trash;
+  fmtg packet;
   if (receiver.available())
   {
     receiver.read(&packet, sizeof(fmtg));
-    printp(packet);
-    Serial.println("----------------------");
-    Serial.println(++c);
+    if(!memcmp(packet.dst, addr, ADDR_S)){
+      handleRecipient(&packet);
+    } else if(!memcmp(packet.ir, addr, ADDR_S)){
+      // handleReceiver(&packet);
+    } else{
+      printp(packet);
+      // nonReceiver(&packet);
+    }
   }
 
 }
+

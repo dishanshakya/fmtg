@@ -5,9 +5,9 @@
 
 #include <RF24.h>
 #include <SPI.h>
-#include "ecc.h"
+#include "constants.h"
 
-const byte addr[ADDR_S];
+extern const byte addr[ADDR_S];
 
 // An FMTG packet structure
 typedef struct{
@@ -21,31 +21,10 @@ typedef struct{
 } fmtg;
 
 
-fmtg construct_discovery(byte dst[ADDR_S]){
-	fmtg packet;
-	memcpy(packet.src, addr, ADDR_S); 
-	memcpy(packet.dst, dst, ADDR_S); 
-	memcpy(packet.is, addr, ADDR_S); 
-	memcpy(packet.ir, BROADCAST_ADDR, ADDR_S);
-    packet.type = P_DISC;
-	packet.hop = 0;
-	memset(packet.payload, 0x00, PAYLOAD_S);
-	return packet;
-}
+fmtg construct_discovery(byte dst[ADDR_S]);
 
-fmtg construct_ack(fmtg* discovery)
-{
-	fmtg packet;
-	memcpy(packet.src, discovery->dst, ADDR_S); 
-	memcpy(packet.dst, discovery->src, ADDR_S); 
-	memcpy(packet.is, addr, ADDR_S); 
-	memcpy(packet.ir, discovery->is, ADDR_S);
-    packet.type = P_ACK;
-    packet.hop = 0;
-	memset(packet.payload, 0x00, PAYLOAD_S);
-	return packet;
-}
+fmtg construct_ack(fmtg* discovery);
 
-
+fmtg construct_relay_pkt(fmtg *packet);
 
 #endif

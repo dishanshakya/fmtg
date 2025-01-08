@@ -1,6 +1,8 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+#include <Arduino.h>
+
 #define ADDR_S 2
 #define FULL_ADDR_S 5
 #define PAYLOAD_S 21
