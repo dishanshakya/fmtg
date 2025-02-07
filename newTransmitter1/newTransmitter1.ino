@@ -5,10 +5,10 @@
 
 
 byte addr[] = "11111";
-RF24 transmit(5,6);
+RF24 transmit(7,8);
 
 volatile unsigned rear = 0, avail = 0, front = 0;
-volatile byte micBuffer[32];
+ byte micBuffer[32], buffer[32];
 
 void setup(){
   // TCCR2B = TCCR2B & B11111000 | B00000001;
@@ -23,9 +23,11 @@ void setup(){
   transmit.begin();
   transmit.stopListening();
   transmit.openWritingPipe(addr);
-  transmit.setCRCLength(2);
-  transmit.setDataRate(1);
+  transmit.setCRCLength(1);
+  transmit.setDataRate(0);
   transmit.setAutoAck(0);
+  transmit.setPALevel(RF24_PA_MAX);
+  // transmit.enableDynamicAck();
 
   transmit.printDetails();
 
@@ -42,7 +44,7 @@ void sample(){
   // analogWrite(9, sinx);
   // Serial.write(&sinx, 1);
   // x+= 0.1;
-  // // Serial.println(x);
+  // Serial.println(x);
   
   // // if (x < 155 && x > 135) x = 144;
  if(i<32 && !avail)
@@ -53,6 +55,7 @@ void sample(){
  else {
   i = 0;
   avail = 1;
+  // memcpy(buffer, micBuffer, 32);
  }
   
   // static float x = 0;
@@ -72,8 +75,9 @@ void loop(){
   if(avail)
   {
     noInterrupts();
-     transmit.writeFast(micBuffer, 32);
-     transmit.txStandBy();
+     transmit.startFastWrite(micBuffer, 32, 1);
+    //  transmit.txStandBy();
+     Serial.write((byte*)micBuffer, 32);
      avail = 0;
      interrupts();
 //      Serial.write(black, 32);
