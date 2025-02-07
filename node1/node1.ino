@@ -7,8 +7,8 @@
 #include <routing.h>
 #include <ecc.h>
 
-RF24 transmitter(2,3);
-RF24 receiver(5,4); // old bootloader arduino
+RF24 transmitter(7,8);
+RF24 receiver(5,6); // old bootloader arduino
 
 void handleRecipient(fmtg *packet){
 
@@ -26,6 +26,8 @@ void handleReceiver(fmtg *packet){
 }
 
 void setup() {
+  pinMode(1, OUTPUT);
+  pinMode(0, OUTPUT);
 
   assign_address(addr_n1);
 
@@ -53,8 +55,8 @@ void setup() {
   receiver.startListening();
   transmitter.stopListening();
 
-  // transmitter.printDetails();
-  // receiver.printDetails();  
+  transmitter.printDetails();
+  receiver.printDetails();  
 
   fmtg discovery = construct_discovery(addr_n2);
   broadcast(&transmitter, &receiver, &discovery);
@@ -70,8 +72,10 @@ void loop() {
     insertEntry(&packet);
     if(!memcmp(packet.dst, addr, ADDR_S)){
       handleRecipient(&packet);
+      digitalWrite(1, HIGH);
     } else{
       handleReceiver(&packet);
+      digitalWrite(0, HIGH);
       // printp(packet);
       // nonReceiver(&packet);
     }
