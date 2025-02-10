@@ -10,6 +10,28 @@
 RF24 transmitter(2,3);
 RF24 receiver(4,5); // new bootloader arduino
 
+void handleReceiver(fmtg packet){
+  // relay(&transmitter, &receiver, packet);
+  byte ir[] = "11";
+  memcpy(packet.ir, ir, ADDR_S);
+  memcpy(packet.is, addr, ADDR_S);
+  printp(packet);
+
+  unicast(&transmitter, &packet);
+
+}
+
+void nonReceiver(fmtg packet){
+
+  memcpy(packet.is, addr, ADDR_S);
+
+  Serial.println("relaying this packet:");
+  printp(packet);
+  
+  broadcast(&transmitter, &receiver, &packet);
+
+}
+
 void handleRecipient(fmtg *packet){
   if(packet->type == P_DISC){
     Serial.println("received a discovery, sending ack");
@@ -66,11 +88,12 @@ void setup() {
   receiver.startListening();
   transmitter.stopListening();
 
-  // transmitter.printDetails();
-  // receiver.printDetails();  
+  transmitter.printDetails();
+  receiver.printDetails();  
 
-  fmtg discovery = construct_discovery(addr_n3);
-  broadcast(&transmitter, &receiver, &discovery);
+  // Serial.print("nigga");
+  fmtg discovery = construct_discovery(addr_n1);
+  // broadcast(&transmitter, &receiver, &discovery);
   
 }
 
@@ -82,10 +105,10 @@ void loop() {
     if(!memcmp(packet.dst, addr, ADDR_S)){
       handleRecipient(&packet);
     } else if(!memcmp(packet.ir, addr, ADDR_S)){
-      // handleReceiver(&packet);
+      handleReceiver(packet);
     } else{
       printp(packet);
-      // nonReceiver(&packet);
+      nonReceiver(packet);
     }
   }
 

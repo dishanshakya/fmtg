@@ -49,12 +49,13 @@ void sample(){
   // // if (x < 155 && x > 135) x = 144;
  if(i<32 && !avail)
  {
-  micBuffer[i] = x;
+  micBuffer[i] = 3*x - 123*2;
   i++;
  }
  else {
   i = 0;
   avail = 1;
+    //  Serial.write((byte*)micBuffer, 32);
   // memcpy(buffer, micBuffer, 32);
  }
   
@@ -63,7 +64,7 @@ void sample(){
   // int val = (sinx +1) * 127;
   
   // analogWrite(11, x);
-  // // Serial.println(x);
+  // Serial.println(x);
   // x += 0.1;
   
 
@@ -77,7 +78,7 @@ void loop(){
     noInterrupts();
      transmit.startFastWrite(micBuffer, 32, 1);
     //  transmit.txStandBy();
-     Serial.write((byte*)micBuffer, 32);
+    //  Serial.write((byte*)micBuffer, 32);
      avail = 0;
      interrupts();
 //      Serial.write(black, 32);

@@ -1,7 +1,7 @@
 #include <RF24.h>
 #include <SPI.h>
 #include <printf.h>
-#include <TimerOne.h>
+#include <TimerTwo.h>
 #define size 1024
 // #include <fmtg.h>
 
@@ -18,7 +18,7 @@ void play()
   static unsigned chunkIndex = 0, i =0;
   if(i<32)
   {
-    byte n = audioBuffer[i];
+    byte n = audioBuffer[i] - 30;
     // Serial.write(&n, 1);
     analogWrite(9, n);
     analogWrite(10, 255-n);
@@ -47,7 +47,7 @@ void setup() {
   TCCR1A = _BV(COM1A1) | _BV(WGM11);   // Fast PWM, Clear on Compare Match (Non-inverting)
   TCCR1B = _BV(WGM13) | _BV(WGM12) | _BV(CS10); // Fast PWM, No Prescaler (CS10 = 1)
   
-  ICR1 = 31;
+  ICR1 = 100;
   
   receiver.begin();
   receiver.setDataRate(0);
@@ -61,8 +61,10 @@ void setup() {
 
   receiver.printDetails();
 //  analogWrite (3,255);
-  Timer1.initialize(125);
-  Timer1.attachInterrupt(play);
+  Timer2.init(125, play);
+  Timer2.start();
+  // Timer2.attachInterrupt(play);
+  // analogWrite(9, 50);
 
 }
 void loop() {

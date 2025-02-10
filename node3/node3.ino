@@ -5,11 +5,14 @@
 #include <fmtg.h>
 #include <utils.h>
 #include <routing.h>
+#include <ecc.h>
 
-RF24 transmitter(2,3);
-RF24 receiver(4,5); // new bootloader arduino
+
+RF24 transmitter(5,6);
+RF24 receiver(7,8); // new bootloader arduino
 
 void handleRecipient(fmtg *packet){
+printp(*packet);
   if(packet->type == P_DISC){
     Serial.println("received a discovery, sending ack");
     fmtg ack = construct_ack(packet);
@@ -37,10 +40,15 @@ void handleRecipient(fmtg *packet){
   //   break;
   // }
 }
+void handleReceiver(fmtg *packet){
+printp(*packet);
+  relay(&transmitter, &receiver, packet);
+}
+
 
 void setup() {
 
-  assign_address(addr_n2);
+  assign_address(addr_n3);
   
   transmitter.begin();
   receiver.begin();
@@ -63,11 +71,12 @@ void setup() {
   receiver.startListening();
   transmitter.stopListening();
 
-  // transmitter.printDetails();
-  // receiver.printDetails();  
+   transmitter.printDetails();
+   receiver.printDetails();  
 
-  fmtg discovery = construct_discovery(addr_n1);
-  broadcast(&transmitter, &receiver, &discovery);
+  fmtg discovery = construct_discovery(addr_n3);
+  // broadcast(&transmitter, &receiver, &discovery);
+  // receiver.closeReadingPipe(1);
   
 }
 
@@ -75,6 +84,7 @@ void loop() {
   fmtg packet;
   if (receiver.available())
   {
+    Serial.println("pasa");
     receiver.read(&packet, sizeof(fmtg));
     if(!memcmp(packet.dst, addr, ADDR_S)){
       handleRecipient(&packet);

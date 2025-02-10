@@ -7,31 +7,49 @@
 #include <routing.h>
 #include <ecc.h>
 
-RF24 transmitter(7,8);
-RF24 receiver(5,6); // old bootloader arduino
+
+RF24 transmitter(2,3);
+RF24 receiver(5, 4); // new bootloader arduino
 
 void handleRecipient(fmtg *packet){
-
+printp(*packet);
   if(packet->type == P_DISC){
     Serial.println("received a discovery, sending ack");
     fmtg ack = construct_ack(packet);
+    printp(ack);
     unicast(&transmitter, &ack);
   } else if(packet->type == P_ACK){
     Serial.println("Received ack, found recepient!");
   }
-}
+  // switch(packet->type){
+  //   case P_DISC:
+  //   Serial.println("received a discovery, sending ack");
+  //   fmtg ack = construct_ack(packet);
+  //   printp(ack);
+  //   unicast(&transmitter, &ack);
+  //   break;
 
+  //   case 65:
+  //   Serial.println("Found recepient!");
+  //   break;
+
+  //   case P_DAT:
+  //   break;
+
+  //   default:
+  //   Serial.println("wtf?");
+  //   break;
+  // }
+}
 void handleReceiver(fmtg *packet){
+printp(*packet);
   relay(&transmitter, &receiver, packet);
 }
 
+
 void setup() {
-  pinMode(1, OUTPUT);
-  pinMode(0, OUTPUT);
 
   assign_address(addr_n1);
-
-  initRoutingTable();
   
   transmitter.begin();
   receiver.begin();
@@ -45,7 +63,6 @@ void setup() {
   transmitter.setCRCLength(2);
   transmitter.setPALevel(3);
 
-
   byte unicast_pipe[5];
   byte broadcast_pipe[5];
   memcpy(unicast_pipe, full_addr(addr), FULL_ADDR_S);
@@ -55,12 +72,12 @@ void setup() {
   receiver.startListening();
   transmitter.stopListening();
 
-  transmitter.printDetails();
-  receiver.printDetails();  
+   transmitter.printDetails();
+   receiver.printDetails();  
 
-  fmtg discovery = construct_discovery(addr_n2);
+  fmtg discovery = construct_discovery(addr_n3);
   broadcast(&transmitter, &receiver, &discovery);
-  
+  receiver.closeReadingPipe(1);
   
 }
 
@@ -69,14 +86,12 @@ void loop() {
   if (receiver.available())
   {
     receiver.read(&packet, sizeof(fmtg));
-    insertEntry(&packet);
     if(!memcmp(packet.dst, addr, ADDR_S)){
       handleRecipient(&packet);
-      digitalWrite(1, HIGH);
+    } else if(!memcmp(packet.ir, addr, ADDR_S)){
+      // handleReceiver(&packet);
     } else{
-      handleReceiver(&packet);
-      digitalWrite(0, HIGH);
-      // printp(packet);
+      printp(packet);
       // nonReceiver(&packet);
     }
   }
