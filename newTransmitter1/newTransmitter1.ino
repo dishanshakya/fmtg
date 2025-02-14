@@ -24,7 +24,7 @@ void setup(){
   transmit.stopListening();
   transmit.openWritingPipe(addr);
   transmit.setCRCLength(1);
-  transmit.setDataRate(0);
+  transmit.setDataRate(1);
   transmit.setAutoAck(0);
   transmit.setPALevel(RF24_PA_MAX);
   // transmit.enableDynamicAck();
@@ -49,7 +49,7 @@ void sample(){
   // // if (x < 155 && x > 135) x = 144;
  if(i<32 && !avail)
  {
-  micBuffer[i] = 3*x - 123*2;
+  micBuffer[i] = x*2-206;
   i++;
  }
  else {
@@ -78,7 +78,7 @@ void loop(){
     noInterrupts();
      transmit.startFastWrite(micBuffer, 32, 1);
     //  transmit.txStandBy();
-    //  Serial.write((byte*)micBuffer, 32);
+     Serial.write((byte*)micBuffer, 32);
      avail = 0;
      interrupts();
 //      Serial.write(black, 32);

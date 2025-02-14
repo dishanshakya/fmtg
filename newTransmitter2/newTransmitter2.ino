@@ -18,10 +18,10 @@ void play()
   static unsigned chunkIndex = 0, i =0;
   if(i<32)
   {
-    byte n = audioBuffer[i] - 30;
+    byte n = audioBuffer[i];
     // Serial.write(&n, 1);
-    analogWrite(9, n);
-    analogWrite(10, 255-n);
+    analogWrite(9, 255-n);
+    analogWrite(10, n);
     i++;
   }
   else {
@@ -50,7 +50,7 @@ void setup() {
   ICR1 = 100;
   
   receiver.begin();
-  receiver.setDataRate(0);
+  receiver.setDataRate(1);
   receiver.setCRCLength(1);
   receiver.openReadingPipe(0, addr);
   // receiver.openReadingPipe(1, broadcast);
