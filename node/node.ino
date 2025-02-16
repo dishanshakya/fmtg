@@ -110,7 +110,14 @@ void handledata(fmtg *packet){
 
     if(addrcmp(packet->dst, addr)){
       Serial.println("destination mai raixu esko, playing on speaker");
-        // do someth8ihn with the data
+      for (int i =0; i<50; i++)
+      {
+        byte buff[16] = "Ringing";
+        fmtg data = construct_data_from_ack(*packet, buff);
+        data.hop = i;
+        unicast(&transmitter, &data);
+        delay(100);
+      }    // do someth8ihn with the data
     } else{
       Serial.println("data ta ho but destinatoin ma haina, relay garnu paryo, searching on routing table");
         int index  = search(packet);

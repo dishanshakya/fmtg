@@ -18,4 +18,9 @@ void printp(fmtg packet);
 int addrcmp(const byte addr1[], const byte addr2[]);
 
 void *addrcpy(byte addr1[], const byte addr2[]);
+
+void callAfterSeconds(void (*func)()); 
+
+extern void (*callbackFunction)();
+
 #endif

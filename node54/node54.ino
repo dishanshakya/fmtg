@@ -45,13 +45,17 @@ void setup(){
 
 
     //  check nrf
-    transmitter.printDetails();
-    receiver.printDetails();
+    transmitter.printPrettyDetails();
+    receiver.printPrettyDetails();
+
+      Serial.println(transmitter.getChannel());
+    Serial.println(receiver.getChannel());
 
     // Discover node
-    fmtg discovery = construct_discovery(addr_n2);
+    fmtg discovery = construct_discovery(addr_n3);
     // for(int i = 0; i<100; i++)
     broadcast(&transmitter, &receiver, &discovery);
+    callAfterSeconds(wakeup);
 
     
 }
@@ -77,8 +81,6 @@ void wakeup()
 {
   receiver.openReadingPipe(1, broadcast_pipe);
   Serial.println("yo print bhayo interrupt muji");
-  Timer1.detachInterrupt();
-  Timer1.stop();
 }
 
 void rebroadcast(fmtg packet){
@@ -87,6 +89,7 @@ void rebroadcast(fmtg packet){
   Serial.println("rebroadcasting this packet:");
   printp(packet);
   broadcast(&transmitter, &receiver, &packet);
+  callAfterSeconds(wakeup);
 
 }
 
@@ -105,6 +108,7 @@ void sendack(fmtg *packet){
 void broadcast_reconnect(fmtg packet){
     fmtg reconnect = construct_reconnect(packet);
     broadcast(&transmitter, &receiver, &reconnect);
+    callAfterSeconds(wakeup);
 }
 
 void handledata(fmtg *packet){
@@ -170,6 +174,14 @@ void own_addr_case(fmtg *packet){
         if(addrcmp(packet->dst, addr)){
             Serial.println("Got an ack from the recepient");
             printp(*packet);
+            for (int i =0; i<50; i++)
+            {
+              byte buff[16] = "Ringing";
+              fmtg data = construct_data_from_ack(*packet, buff);
+              data.hop = i;
+              unicast(&transmitter, &data);
+              delay(100);
+            }
         } else{
           Serial.println("destination ma haina raixa");
             relayack(packet);
@@ -194,13 +206,13 @@ void loop(){
     fmtg packet;
     uint8_t pipe;
 
-    if(receiver.available(&pipe)){
+    if(receiver.available()){
         Serial.println("Receiver Available, reading packet");
         receiver.read(&packet, sizeof(packet));
-        if(pipe){
+        if(addrcmp(packet.ir, BROADCAST_ADDR)){
             Serial.println("pipe 1 (broadcast) ma aayo");
             broadcast_addr_case(&packet);
-        } else{
+        } else if(addrcmp(packet.ir, addr)){
             Serial.println("pipe 0 (unicast) ma aayo");
             own_addr_case(&packet);
         }

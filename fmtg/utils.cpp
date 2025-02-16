@@ -52,3 +52,36 @@ void printp(fmtg packet)
         Serial.print("Hop: ");          Serial.println((int)packet.hop);
         Serial.print("Payload: ");      Serial.println((char*)memcpy(payload, packet.payload, PAYLOAD_S));
 }
+void (*callbackFunction)();
+
+volatile uint16_t interruptCounter = 0;
+const uint16_t targetInterrupts = 3;
+
+void callAfterSeconds(void (*func)()) {
+  callbackFunction = func;
+  interruptCounter = 0;
+  cli();
+
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1 = 0;
+
+  OCR1A = 62500 - 1; // (16000000 / 1024) * 4 seconds = 62500
+
+  TCCR1B |= (1 << WGM12);                  // CTC mode
+  TCCR1B |= (1 << CS12) | (1 << CS10);     // Prescaler 1024
+
+  TIMSK1 |= (1 << OCIE1A);                 // Enable Timer1 Compare Match A interrupt
+
+  sei(); // Enable interrupts
+}
+
+ISR(TIMER1_COMPA_vect) {
+  interruptCounter++;
+  if (interruptCounter >= targetInterrupts) {
+    if (callbackFunction) {
+      callbackFunction();
+    }
+    TIMSK1 &= ~(1 << OCIE1A); // Disable Timer1 interrupt
+  }
+}

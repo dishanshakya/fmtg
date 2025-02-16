@@ -25,6 +25,7 @@ void setup(){
     transmitter.setDataRate(1);
     transmitter.setPALevel(3);
     transmitter.setCRCLength(2);
+    transmitter.setChannel(20);
     // transmitter.enableDynamicAck();
     // transmitter.setAutoAck(0);
     transmitter.stopListening();
@@ -34,6 +35,7 @@ void setup(){
     receiver.setDataRate(1);
     receiver.setPALevel(3);
     receiver.setCRCLength(2);
+    receiver.setChannel(10);
     // receiver.enableDynamicAck();
     // receiver.setAutoAck(0);
    
@@ -45,12 +47,13 @@ void setup(){
 
 
     //  check nrf
-    transmitter.printDetails();
-    receiver.printDetails();
+    transmitter.printPrettyDetails();
+    receiver.printPrettyDetails();
 
     // Discover node
     fmtg discovery = construct_discovery(addr_n3);
-    //broadcast(&transmitter, &receiver, &discovery);
+    broadcast(&transmitter, &receiver, &discovery);
+    callAfterSeconds(wakeup);
 
     
 }
@@ -86,6 +89,7 @@ void rebroadcast(fmtg packet){
   Serial.println("rebroadcasting this packet:");
   printp(packet);
   broadcast(&transmitter, &receiver, &packet);
+  callAfterSeconds(wakeup);
 
 }
 
@@ -104,6 +108,7 @@ void sendack(fmtg *packet){
 void broadcast_reconnect(fmtg packet){
     fmtg reconnect = construct_reconnect(packet);
     broadcast(&transmitter, &receiver, &reconnect);
+    callAfterSeconds(wakeup);
 }
 
 void handledata(fmtg *packet){
@@ -113,8 +118,10 @@ void handledata(fmtg *packet){
         // do someth8ihn with the data
     } else{
       Serial.println("data ta ho but destinatoin ma haina, relay garnu paryo, searching on routing table");
+      displayTable();
+       printp(*packet);
         int index  = search(packet);
-        if(index > 0){
+        if(index >= 0){
           Serial.println("xa table ma");
             if(addrcmp(routing_table[index].ir, "\0\0")){
                broadcast_reconnect(*packet); 
@@ -127,9 +134,10 @@ void handledata(fmtg *packet){
                 memcpy(packet->ir, routing_table[index].is, ADDR_S);
             }
             memcpy(packet->is, addr, ADDR_S);
-            unicast(&receiver, packet);
+           printp(*packet);
+            unicast(&transmitter, packet);
         }
-        Serial.println("table ma xaina, not my business");
+        else Serial.println("table ma xaina, not my business");
     }
 }
 
@@ -168,7 +176,14 @@ void own_addr_case(fmtg *packet){
       Serial.println("ack raixa");
         if(addrcmp(packet->dst, addr)){
             Serial.println("Got an ack from the recepient");
-            printp(*packet);
+            for (int i =0; i<50; i++)
+            {
+              byte buff[16] = "Ringing";
+              fmtg data = construct_data_from_ack(*packet, buff);
+              data.hop = i;
+              unicast(&transmitter, &data);
+              delay(100);
+            }
         } else{
           Serial.println("destination ma haina raixa");
             relayack(packet);
@@ -194,14 +209,13 @@ void loop(){
     uint8_t pipe;
     static int i = 0;
 
-    if(receiver.available(&pipe)){
+    if(receiver.available()){
         Serial.println("Receiver Available, reading packet");
         receiver.read(&packet, sizeof(packet));
-        Serial.println(i++);
-        if(pipe){
+        if(addrcmp(packet.ir, BROADCAST_ADDR)){
             Serial.println("pipe 1 (broadcast) ma aayo");
             broadcast_addr_case(&packet);
-        } else{
+        } else if(addrcmp(packet.ir, addr)){
             Serial.println("pipe 0 (unicast) ma aayo");
             own_addr_case(&packet);
         }
