@@ -85,3 +85,42 @@ ISR(TIMER1_COMPA_vect) {
     TIMSK1 &= ~(1 << OCIE1A); // Disable Timer1 interrupt
   }
 }
+
+void (*timer2Callback)();
+
+int c = 0;
+unsigned long t = 0;
+
+void repeatThisShit(void (*func)(), unsigned long intervalMicros) {
+  timer2Callback = func;
+
+  cli(); 
+
+  TCCR2A = 0; 
+  TCCR2B = 0; 
+  TCNT2 = 0;
+
+  TCCR2A |= (1 << WGM21);
+
+  TCCR2B |= (1 << CS22);
+
+  unsigned long clockFrequency = 16000000; 
+  unsigned long prescaler = 64;           
+  unsigned long ticks = (intervalMicros * (clockFrequency / 1000000)) / prescaler;
+
+  if (ticks > 255) {
+    ticks = 255;
+  }
+
+  OCR2A = ticks - 1;
+
+  TIMSK2 |= (1 << OCIE2A);
+
+  sei();
+}
+
+ISR(TIMER2_COMPA_vect) {
+  if (timer2Callback) {
+    timer2Callback();
+  }
+}

@@ -23,4 +23,6 @@ void callAfterSeconds(void (*func)());
 
 extern void (*callbackFunction)();
 
+extern void (*timer2Callback)();
+
 #endif
