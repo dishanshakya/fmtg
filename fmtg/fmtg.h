@@ -29,4 +29,6 @@ fmtg construct_ack(fmtg* discovery);
 
 fmtg construct_relay_pkt(fmtg *packet);
 
+fmtg construct_data_from_ack(fmtg packet, const byte *buff);
+
 #endif

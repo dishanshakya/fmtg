@@ -4,13 +4,15 @@
 #include <utils.h>
 #include <routing.h>
 #include <ecc.h>
-#include <TimerOne.h>
+#include <TimerTwo.h>
 
 RF24 transmitter(2,3);
 RF24 receiver(4,5);
 
 byte unicast_pipe[5];
 byte broadcast_pipe[5];
+
+bool ringing = false;
 
 void setup(){
     
@@ -20,12 +22,15 @@ void setup(){
     Serial.begin(115200);
     printf_begin();
 
+    Timer2.init(10000);
+    Timer2.stop();
+
     // Transmitter setup
     transmitter.begin();
     transmitter.setDataRate(1);
     transmitter.setPALevel(3);
     transmitter.setCRCLength(2);
-    transmitter.setChannel(20);
+    transmitter.setChannel(10);
     // transmitter.enableDynamicAck();
     // transmitter.setAutoAck(0);
     transmitter.stopListening();
@@ -35,7 +40,7 @@ void setup(){
     receiver.setDataRate(1);
     receiver.setPALevel(3);
     receiver.setCRCLength(2);
-    receiver.setChannel(10);
+    receiver.setChannel(20);
     // receiver.enableDynamicAck();
     // receiver.setAutoAck(0);
    
@@ -79,8 +84,6 @@ void wakeup()
 {
   receiver.openReadingPipe(1, broadcast_pipe);
   Serial.println("yo print bhayo interrupt muji");
-  Timer1.detachInterrupt();
-  Timer1.stop();
 }
 
 void rebroadcast(fmtg packet){
@@ -111,11 +114,33 @@ void broadcast_reconnect(fmtg packet){
     callAfterSeconds(wakeup);
 }
 
+void sample(){};
+
 void handledata(fmtg *packet){
 
     if(addrcmp(packet->dst, addr)){
       Serial.println("destination mai raixu esko, playing on speaker");
         // do someth8ihn with the data
+        if(packet->payload[0] = 'R')
+        {
+          Serial.println((char*)&packet->payload[1]);
+          Serial.println(packet->hop);
+          if(!ringing)
+          {
+            Timer2.attachInterrupt(ring);
+            ringing = true;
+          }
+        }
+        else if(packet->payload[0] == 'A')
+        {
+          Timer2.detachInterrupt();
+          ringing = false;
+        } else if(packet->payload[0] == 'N')
+        {
+          Timer2.detachInterrupt();
+          ringing = false;
+          Serial.println("Uthayena phone muji");
+        }
     } else{
       Serial.println("data ta ho but destinatoin ma haina, relay garnu paryo, searching on routing table");
       displayTable();
@@ -170,20 +195,36 @@ void relayack(fmtg *packet){
     unicast(&transmitter, packet);
 }
 
+void ring()
+{
+  static int i = 0;
+  fmtg packet;
+  byte buff[16] = "Ringing";
+  if(i<300)
+  {
+    addrcpy(packet.src, addr);
+    addrcpy(packet.dst, routing_table[0].dst);
+    addrcpy(packet.is, addr);
+    addrcpy(packet.ir, routing_table[0].is);
+    packet.type = P_DAT;
+    packet.payload[0] = 'R';
+    memcpy(&packet.payload[1], buff, 16);
+    unicast(&transmitter, &packet);
+    Serial.println("interrupt chalyo");
+    i++;
+  } else {
+    Timer2.detachInterrupt();
+    ringing = false;
+  }
+
+}
 void own_addr_case(fmtg *packet){
     Serial.println("unicast ack ho ki rec ho yo muji check garnu paryo");
     if(packet->type == P_ACK){
       Serial.println("ack raixa");
         if(addrcmp(packet->dst, addr)){
-            Serial.println("Got an ack from the recepient");
-            for (int i =0; i<50; i++)
-            {
-              byte buff[16] = "Ringing";
-              fmtg data = construct_data_from_ack(*packet, buff);
-              data.hop = i;
-              unicast(&transmitter, &data);
-              delay(100);
-            }
+            Serial.println("Got an ack from the recepient. Start ringing");
+            
         } else{
           Serial.println("destination ma haina raixa");
             relayack(packet);

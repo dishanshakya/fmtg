@@ -36,6 +36,17 @@ fmtg construct_ack(fmtg* discovery)
 	return packet;
 }
 
+fmtg construct_data_from_ack(fmtg packet, const byte *buff) 
+{
+	memcpy(packet.dst, packet.src, ADDR_S);
+	memcpy(packet.src, addr, ADDR_S);
+	memcpy(packet.ir, packet.is, ADDR_S);
+	memcpy(packet.is, addr, ADDR_S);
+	packet.type = P_DAT;
+	memcpy(packet.payload, buff, 16);
+	return packet;
+}
+
 fmtg construct_relay_pkt(fmtg *packet){
     fmtg relay_packet;
     memcpy(relay_packet.src, packet->src, ADDR_S);

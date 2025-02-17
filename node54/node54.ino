@@ -4,13 +4,15 @@
 #include <utils.h>
 #include <routing.h>
 #include <ecc.h>
-#include <TimerOne.h>
+#include <TimerTwo.h>
 
 RF24 transmitter(2,3);
 RF24 receiver(5,4);
 
 byte unicast_pipe[5];
 byte broadcast_pipe[5];
+
+bool ringing = false;
 
 void setup(){
     
@@ -19,12 +21,15 @@ void setup(){
 
     Serial.begin(115200);
     printf_begin();
+    Timer2.init(10000);
+    Timer2.stop();
 
     // Transmitter setup
     transmitter.begin();
     transmitter.setDataRate(1);
     transmitter.setPALevel(3);
     transmitter.setCRCLength(2);
+    transmitter.setChannel(20);
     // transmitter.enableDynamicAck();
     // transmitter.setAutoAck(0);
     transmitter.stopListening();
@@ -34,6 +39,7 @@ void setup(){
     receiver.setDataRate(1);
     receiver.setPALevel(3);
     receiver.setCRCLength(2);
+    receiver.setChannel(10);
     // receiver.enableDynamicAck();
     // receiver.setAutoAck(0);
    
@@ -52,7 +58,7 @@ void setup(){
     Serial.println(receiver.getChannel());
 
     // Discover node
-    fmtg discovery = construct_discovery(addr_n3);
+    fmtg discovery = construct_discovery(addr_n2);
     // for(int i = 0; i<100; i++)
     broadcast(&transmitter, &receiver, &discovery);
     callAfterSeconds(wakeup);
@@ -111,11 +117,59 @@ void broadcast_reconnect(fmtg packet){
     callAfterSeconds(wakeup);
 }
 
+void ring()
+{
+  static int i = 0;
+    Serial.println((char *)routing_table[0].dst);
+  fmtg packet;
+  byte buff[16] = "Ringing";
+  if(i<300)
+  {
+    addrcpy(packet.src, addr);
+    addrcpy(packet.dst, routing_table[0].src);
+    addrcpy(packet.is, addr);
+    addrcpy(packet.ir, routing_table[0].is);
+    packet.type = P_DAT;
+    packet.payload[0] = 'R';
+    packet.hop = i;
+    memcpy(&packet.payload[1], buff, 16);
+    displayTable();
+    printp(packet);
+    unicast(&transmitter, &packet);
+  
+    i++;
+  } else {
+    Timer2.detachInterrupt();
+    Serial.println("true");
+    ringing = false;
+     i = 0;
+  }
+
+}
+
 void handledata(fmtg *packet){
 
     if(addrcmp(packet->dst, addr)){
       Serial.println("destination mai raixu esko, playing on speaker");
         // do someth8ihn with the data
+        Serial.println((char*)&packet->payload[1]);
+        if(packet->payload[0] = 'R')
+        {
+          if(!ringing)
+          {
+
+            ringing = true;
+          }
+        }
+        else if(packet->payload[0] == 'A')
+        {
+
+          ringing = false;
+        } else if(packet->payload[0] == 'N')
+        {
+          ringing = false;
+          Serial.println("Uthayena phone muji");
+        }
     } else{
       Serial.println("data ta ho but destinatoin ma haina, relay garnu paryo, searching on routing table");
         int index  = search(packet);
@@ -173,15 +227,14 @@ void own_addr_case(fmtg *packet){
       Serial.println("ack raixa");
         if(addrcmp(packet->dst, addr)){
             Serial.println("Got an ack from the recepient");
+            insertEntry(packet);
             printp(*packet);
-            for (int i =0; i<50; i++)
-            {
-              byte buff[16] = "Ringing";
-              fmtg data = construct_data_from_ack(*packet, buff);
-              data.hop = i;
-              unicast(&transmitter, &data);
-              delay(100);
-            }
+            Timer2.attachInterrupt(ring);
+            Timer2.start();
+            // Serial.println(Timer2.getPeriodMax());
+            // fmtg data = construct_data_from_ack(*packet, "Ringing");
+            // unicast(&transmitter, &data);
+           ringing = true;
         } else{
           Serial.println("destination ma haina raixa");
             relayack(packet);
