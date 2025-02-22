@@ -3,9 +3,9 @@
 
 #include "constants.h"
 
-extern byte addr_n1[ADDR_S];
-extern byte addr_n2[ADDR_S];
-extern byte addr_n3[ADDR_S];
-extern byte addr_n4[ADDR_S];
+extern uint16_t addr_n1;
+extern uint16_t addr_n2;
+extern uint16_t addr_n3;
+extern uint16_t addr_n4;
 
 #endif

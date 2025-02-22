@@ -1,6 +1,6 @@
 #include "ecc.h"
 
-extern byte addr_n1[ADDR_S] = "11";
-extern byte addr_n2[ADDR_S] = "22";
-extern byte addr_n3[ADDR_S] = "33";
-extern byte addr_n4[ADDR_S] = "44";
+extern uint16_t addr_n1 = 0x1111;
+extern uint16_t addr_n2 = 0x2222;
+extern uint16_t addr_n3 = 0x3333;
+extern uint16_t addr_n4 = 0x4444;

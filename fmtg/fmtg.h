@@ -4,31 +4,33 @@
 #define FMTG
 
 #include <RF24.h>
-#include <SPI.h>
 #include "constants.h"
 
-extern const byte addr[ADDR_S];
+extern uint16_t addr;
+
+typedef enum {
+	IDLE,
+	CONNECTING,
+	RINGING,
+	INCALL,
+	RELAY,
+	TERMINATED
+} state_t;
 
 // An FMTG packet structure
-typedef struct{
-    byte src[ADDR_S];		// Source Address
-    byte dst[ADDR_S];		// Destination Address
-    byte is[ADDR_S];		// Intermediate Sender
-    byte ir[ADDR_S];		// Intermediate Receiver
+struct fmtg{
+    uint16_t src;		// Source Address
+    uint16_t dst;		// Destination Address
+    uint16_t is;		// Intermediate Sender
+    uint16_t ir;		// Intermediate Receiver
     byte type;			// Type of packet (P_DISC, P_ACK, P_DAT)
+	uint8_t ischannel, irchannel;
     uint16_t hop;			// Hop count
     byte payload[PAYLOAD_S];
-} fmtg;
 
-
-fmtg construct_discovery(byte dst[ADDR_S]);
-
-fmtg construct_reconnect(fmtg packet);
-
-fmtg construct_ack(fmtg* discovery);
-
-fmtg construct_relay_pkt(fmtg *packet);
-
-fmtg construct_data_from_ack(fmtg packet, const byte *buff);
+    fmtg(uint16_t src, uint16_t dst, uint16_t is, uint16_t ir, byte type, uint8_t ischannel, uint8_t irchannel);
+    fmtg(){}
+    void attachPayload(byte type, byte buff[], int n);
+};
 
 #endif

@@ -1,6 +1,31 @@
 #include "routing.h"
 
+RoutingEntry::RoutingEntry(uint16_t src, uint16_t dst, uint16_t ir, uint16_t is, uint8_t irchannel, uint8_t ischannel)
+{
+	this->src = src;
+	this->dst = dst;
+	this->is = is;
+	this->ir = ir;
+	this->ispc = 0;
+	this->irpc = 0;
+	this->irchannel = irchannel;
+	this->ischannel = ischannel;
+}
+
+RoutingEntry::RoutingEntry(fmtg *packet){
+	this->src = packet->src;
+	this->dst = packet->dst;
+	this->ir = packet->ir;
+	this->is = packet->is;
+	this->ispc = 0;
+	this->irpc = 0;
+	this->ischannel = packet->ischannel;
+	this->irchannel = packet->irchannel;
+}
+
 RoutingEntry routing_table[MAX_ENTRIES];
+
+RoutingEntry *ownEntry = routing_table;
 
 void initRoutingTable() {
     memset(routing_table, 0, sizeof(routing_table));
@@ -12,19 +37,9 @@ int isEmptyEntry(const RoutingEntry entry) {
     return memcmp(&entry, &empty, sizeof(RoutingEntry)) == 0;
 }
 
-RoutingEntry createEntryFromPacket(fmtg *packet){
-	RoutingEntry e;
-	memcpy(e.src, packet->src, ADDR_S);
-	memcpy(e.dst, packet->dst, ADDR_S);
-	memcpy(e.ir, packet->ir, ADDR_S);
-	memcpy(e.is, packet->is, ADDR_S);
-	return e;
-}
-
 int duplicate(fmtg *packet){
-    RoutingEntry entry = createEntryFromPacket(packet);
     for(int i = 0; i < MAX_ENTRIES; i++){
-        if(!memcmp(&routing_table[i], &entry, sizeof(RoutingEntry))){
+        if(packet->src == routing_table[i].src && packet->dst == routing_table[i].dst || packet->dst == routing_table[i].src && packet->src == routing_table[i].dst){
             Serial.println("Duplicate");
             return 1;
         }
@@ -35,9 +50,9 @@ int duplicate(fmtg *packet){
 
 
 int search(fmtg *packet){
-    for(int i = 0; i < MAX_ENTRIES; i++){
-        if(addrcmp(packet->src, routing_table[i].src) && addrcmp(packet->dst, routing_table[i].dst) ||
-        (addrcmp(packet->src, routing_table[i].dst) && addrcmp(packet->dst, routing_table[i].src))){
+    for(int i = 1; i < MAX_ENTRIES; i++){
+        if(packet->src == routing_table[i].src && packet->dst == routing_table[i].dst ||
+        packet->src == routing_table[i].dst && packet->dst == routing_table[i].src){
             return i;
         }
     }
@@ -45,9 +60,10 @@ int search(fmtg *packet){
 }
 
 void insertEntry(fmtg *packet) {
-    RoutingEntry entry = createEntryFromPacket(packet);
-    for (int i = 0; i < MAX_ENTRIES; i++) {
-        if (isEmptyEntry(routing_table[i]) && !duplicate(packet)) {
+    RoutingEntry entry(packet);
+	if(duplicate(packet)) return;
+    for (int i = 1; i < MAX_ENTRIES; i++) {
+        if (isEmptyEntry(routing_table[i])) {
             memcpy(&routing_table[i], &entry, sizeof(RoutingEntry));
             displayTable();
             return;
@@ -59,7 +75,7 @@ void insertEntry(fmtg *packet) {
 void displayTable() {
     Serial.println("\nRouting Table:");
     Serial.println("---------------------------------");
-    Serial.println("| i | src | dst | ir | is |");
+    Serial.println("| i | src | dst | ir | is | ispc | irpc |");
     Serial.println("---------------------------------");
 
     char buffer[ADDR_S + 1]; 
@@ -71,19 +87,25 @@ void displayTable() {
         Serial.print(" |");
 
         if (!isEmptyEntry(routing_table[i])) {
-            Serial.print((const char *)memcpy(buffer, routing_table[i].src, ADDR_S));
+            Serial.print(routing_table[i].src, HEX);
             Serial.print(" | ");
 
-            Serial.print((const char *)memcpy(buffer, routing_table[i].dst, ADDR_S));
+            Serial.print(routing_table[i].dst, HEX);
             Serial.print(" | ");
 
-            Serial.print((const char *)memcpy(buffer, routing_table[i].ir, ADDR_S));
+            Serial.print(routing_table[i].ir, HEX);
             Serial.print(" | ");
 
-            Serial.print((const char *)memcpy(buffer, routing_table[i].is, ADDR_S));
-            Serial.println(" |");
+            Serial.print(routing_table[i].is, HEX);
+            Serial.print(" |");
+
+	    Serial.print(routing_table[i].ispc);
+	    Serial.print(" |");
+
+	    Serial.print(routing_table[i].irpc);
+	    Serial.println(" |");
         } else {
-            Serial.println("null |null |null |null |");
+            Serial.println("null |null |null |null |null |null |");
         }
     }
     Serial.println("----------------------------------------------------------------");

@@ -8,7 +8,7 @@
 #define PAYLOAD_S 21
 #define MAX_ENTRIES 4
 
-const byte BROADCAST_ADDR[ADDR_S] = "ff";
+const uint16_t BROADCAST_ADDR = 0xffff;
 
 const byte P_DISC = 'D';
 const byte P_ACK = 'A';

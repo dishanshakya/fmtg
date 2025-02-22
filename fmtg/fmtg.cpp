@@ -1,59 +1,24 @@
 #include "fmtg.h"
 
-const byte addr[ADDR_S];
+uint16_t addr;
 
-fmtg construct_discovery(byte dst[ADDR_S]){
-	fmtg packet;
-	memcpy(packet.src, addr, ADDR_S); 
-	memcpy(packet.dst, dst, ADDR_S); 
-	memcpy(packet.is, addr, ADDR_S); 
-	memcpy(packet.ir, BROADCAST_ADDR, ADDR_S);
-    packet.type = P_DISC;
-	packet.hop = 0;
-	memset(packet.payload, 0x00, PAYLOAD_S);
-	return packet;
-}
-
-fmtg construct_reconnect(fmtg packet){
-	memcpy(packet.is, addr, ADDR_S); 
-	memcpy(packet.ir, BROADCAST_ADDR, ADDR_S);
-    packet.type = P_REC;
-	packet.hop = 0;
-	memset(packet.payload, 0x00, PAYLOAD_S);
-	return packet;
-}
-
-fmtg construct_ack(fmtg* discovery)
+fmtg::fmtg(uint16_t src, uint16_t dst, uint16_t is, uint16_t ir, byte type, uint8_t ischannel, uint8_t irchannel)
 {
-	fmtg packet;
-	memcpy(packet.src, discovery->dst, ADDR_S); 
-	memcpy(packet.dst, discovery->src, ADDR_S); 
-	memcpy(packet.is, addr, ADDR_S); 
-	memcpy(packet.ir, discovery->is, ADDR_S);
-    packet.type = P_ACK;
-    packet.hop = 0;
-	memset(packet.payload, 0x00, PAYLOAD_S);
-	return packet;
+	this->src = src;
+	this->dst = dst;
+	this->is = is;
+	this->ir = ir;
+	this->type = type;
+	this->ischannel = ischannel;
+	this->irchannel = irchannel;
+	memset(this->payload, 0, sizeof(this->payload));
 }
 
-fmtg construct_data_from_ack(fmtg packet, const byte *buff) 
+void fmtg::attachPayload(byte type, byte buff[], int n)
 {
-	memcpy(packet.dst, packet.src, ADDR_S);
-	memcpy(packet.src, addr, ADDR_S);
-	memcpy(packet.ir, packet.is, ADDR_S);
-	memcpy(packet.is, addr, ADDR_S);
-	packet.type = P_DAT;
-	memcpy(packet.payload, buff, 16);
-	return packet;
-}
-
-fmtg construct_relay_pkt(fmtg *packet){
-    fmtg relay_packet;
-    memcpy(relay_packet.src, packet->src, ADDR_S);
-    memcpy(relay_packet.dst, packet->dst, ADDR_S);
-    memcpy(relay_packet.is, packet->ir, ADDR_S);
-    memcpy(relay_packet.type, packet->type, 1);
-    memcpy(relay_packet.payload, packet->payload, PAYLOAD_S);
-    relay_packet.hop = ++packet->hop;
-    return relay_packet;
+	if(n<17)
+	{
+		this->payload[0] = type;
+		memcpy(&(this->payload[1]), buff, n);
+	}
 }

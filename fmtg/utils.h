@@ -4,25 +4,21 @@
 #include "fmtg.h"
 #include <RF24.h>
 
-// Function to convert our 2 byte address into the full 5 byte address for NRF Module
-uint8_t *full_addr(byte addr[ADDR_S]);
+void initRadio(RF24* radio);
 
-void assign_address(byte address[ADDR_S]);
+void assign_address(uint16_t address);
 
 void broadcast(RF24 *transmitter, RF24 *receiver, fmtg *packet);
 
 void unicast(RF24 *transmitter, fmtg *packet);
 
-void printp(fmtg packet);
-
-int addrcmp(const byte addr1[], const byte addr2[]);
-
-void *addrcpy(byte addr1[], const byte addr2[]);
+void printp(fmtg *packet);
 
 void callAfterSeconds(void (*func)()); 
 
-extern void (*callbackFunction)();
+void repeat(void (*func)(), unsigned long intervalMicros);
 
-extern void (*timer2Callback)();
+void repeat100ms(void (*func)());
 
+void stop100ms();
 #endif

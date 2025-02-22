@@ -5,25 +5,24 @@
 #include "fmtg.h"
 #include "utils.h"
 
+struct RoutingEntry{
+    uint16_t src, dst, ir, is;
+    uint8_t irpc, ispc, irchannel, ischannel;
 
-typedef struct {
-    byte src[ADDR_S];
-    byte dst[ADDR_S];
-    byte ir[ADDR_S];
-    byte is[ADDR_S];
-} RoutingEntry;
+    RoutingEntry(uint16_t src, uint16_t dst, uint16_t ir, uint16_t is, uint8_t irchannel, uint8_t ischannel);
+    RoutingEntry(){}
+    RoutingEntry(fmtg *packet);
+};
 
 extern RoutingEntry routing_table[MAX_ENTRIES];
+
+extern RoutingEntry *ownEntry;
 
 void initRoutingTable();
 
 int isEmptyEntry(const RoutingEntry entry);
 
-RoutingEntry createEntryFromPacket(fmtg *packet);
-
 int duplicate(fmtg *packet);
-
-void relay(RF24 *transmitter, RF24 *receiver, fmtg *packet);
 
 void insertEntry(fmtg *packet);
 
