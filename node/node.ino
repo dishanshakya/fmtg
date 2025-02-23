@@ -4,148 +4,270 @@
 #include <utils.h>
 #include <routing.h>
 #include <ecc.h>
-#include <TimerOne.h>
 
-RF24 transmitter(2,3);
-RF24 receiver(5,4);
+RF24 transmitter(5,6);
+RF24 receiver(7,8);
 
-byte unicast_pipe[5];
-byte broadcast_pipe[5];
+state_t currentState = IDLE;
 
+volatile uint8_t dialpad = 0;
+volatile bool ring = false, calling = false, reject = false, mic = false, speaker = false;
+uint8_t channel = 20;
+volatile byte micBuffer[16], speakerBuffer[16];
+uint16_t contacts[4] = {0x1111, 0x2222, 0x3333, 0x4444};
+
+void dialer()
+{
+  noInterrupts();
+  static unsigned long time = 0;
+  if(millis() - time > 500)
+  {
+    if(currentState == IDLE)
+    {
+      dialpad = (dialpad+1)%4;
+      digitalWrite(0, dialpad&1);
+      digitalWrite(1, dialpad&2);
+      Serial.println(contacts[dialpad], HEX);
+    }
+    else if(currentState == INCALL || currentState == RINGING){
+      Serial.println("stop the call");
+      reject = true;
+      Serial.println(reject);
+    }
+    time = millis();
+
+  }
+  interrupts();
+}
+
+void caller()
+{
+  noInterrupts();
+  static unsigned long time = 0;
+  if(millis() - time > 500)
+  {
+    if(currentState == IDLE)
+    {
+      //start discovery
+      if(contacts[dialpad] != addr)
+        calling = true;
+      else Serial.println("own number?");
+    }
+    else if(currentState == RINGING)
+    {
+      //accept call
+      currentState = INCALL;
+      
+    }
+    time = millis();
+  }
+  interrupts();
+}
+
+void sample()
+{
+  static int i=0;
+  if(i < 16)
+  {
+    if(speaker)
+    {
+
+    }
+
+  }else {
+    i = 0;
+    mic = true;
+    speaker = false;
+  }
+}
 void setup(){
+
+  //button pin configuration
+ pinMode(2, INPUT_PULLUP);
+ pinMode(3, INPUT_PULLUP);
+ attachInterrupt(digitalPinToInterrupt(3), dialer, FALLING);
+ attachInterrupt(digitalPinToInterrupt(2), caller, FALLING);
+
+  //led configuration
+  pinMode(0, OUTPUT);
+  pinMode(1, OUTPUT);
     
-    assign_address(addr_n1);
+    assign_address(addr_n2);
     initRoutingTable();
 
     Serial.begin(115200);
     printf_begin();
 
     // Transmitter setup
-    transmitter.begin();
-    transmitter.setDataRate(1);
-    transmitter.setPALevel(3);
-    transmitter.setCRCLength(2);
-    transmitter.enableDynamicAck();
-    // transmitter.setAutoAck(0);
+    initRadio(&transmitter);
+    transmitter.setChannel(20);
     transmitter.stopListening();
-
     //Receiver Setup
-    receiver.begin();
-    receiver.setDataRate(1);
-    receiver.setPALevel(3);
-    receiver.setCRCLength(2);
-    receiver.enableDynamicAck();
-    // receiver.setAutoAck(0);
-   
-    memcpy(unicast_pipe, full_addr(addr), FULL_ADDR_S);
-    memcpy(broadcast_pipe, full_addr(BROADCAST_ADDR), FULL_ADDR_S);
-    receiver.openReadingPipe(0, unicast_pipe);
-    receiver.openReadingPipe(1, broadcast_pipe);
+    initRadio(&receiver);
+    receiver.setChannel(channel);
+    receiver.openReadingPipe(0, addr);
+    receiver.openReadingPipe(1, BROADCAST_ADDR);
     receiver.startListening();
 
 
     //  check nrf
-    transmitter.printDetails();
-    receiver.printDetails();
+    transmitter.printPrettyDetails();
+    receiver.printPrettyDetails();
 
-    // Discover node
-    fmtg discovery = construct_discovery(addr_n3);
-    broadcast(&transmitter, &receiver, &discovery);
-
-    
+    // calling = true;
 }
 
 void handleReconnect(fmtg *packet){
+    stop100ms();
     Serial.println("routing table ma khojna paryo reconnect garna");
     int index = search(packet);
     if(index < 0){
       Serial.println("xaina raixa muji, feri rebroadcast handinxu");
-        rebroadcast(*packet);
+        rebroadcast(packet);
     } else{
         Serial.println("xa xa, is khali xa ki xaina herna paryo");
-        if(addrcmp(routing_table[index].is, "\0\0")){
+        if(routing_table[index].is == 0){
             Serial.println("Inserting new IS into routing table");
-            addrcpy(routing_table[index].is, packet->is);
-            fmtg ack = construct_ack(packet);
-            ack.type = P_REC;
+            routing_table[index].is = packet->is;
+            fmtg ack(packet->src, packet->dst, addr, packet->is, P_REC, channel, packet->ischannel);
             unicast(&transmitter, &ack);
         }
     }
 }
 void wakeup()
 {
-  receiver.openReadingPipe(1, broadcast_pipe);
+  receiver.openReadingPipe(1, BROADCAST_ADDR);
   Serial.println("yo print bhayo interrupt muji");
-  Timer1.detachInterrupt();
-  Timer1.stop();
 }
 
-void rebroadcast(fmtg packet){
-  insertEntry(&packet);
-  memcpy(packet.is, addr, ADDR_S);
+void rebroadcast(fmtg *packet){
+  insertEntry(packet);
+  packet->is = addr;
   Serial.println("rebroadcasting this packet:");
   printp(packet);
-  broadcast(&transmitter, &receiver, &packet);
-
+  broadcast(&transmitter, &receiver, packet);
+  callAfterSeconds(wakeup);
 }
 
 void sendack(fmtg *packet){
-    if(addrcmp(packet->src, addr)){ 
+    if(packet->src == addr){ 
         Serial.println("Own dick not allowed"); 
         return; 
     }
-    fmtg ack = construct_ack(packet);
+    fmtg ack(addr, packet->src, addr, packet->is, P_ACK, channel, packet->ischannel);
     Serial.println("sending this ack:");
-    printp(ack);
-    insertEntry(packet);
+    printp(&ack);
+    *ownEntry = RoutingEntry(&ack);
     unicast(&transmitter, &ack);
+    currentState = CONNECTING;
 }
 
-void broadcast_reconnect(fmtg packet){
-    fmtg reconnect = construct_reconnect(packet);
+void broadcast_reconnect(fmtg *packet){
+  stop100ms();
+    fmtg reconnect(packet->src, packet->dst, addr, BROADCAST_ADDR, P_REC, channel, 0);
     broadcast(&transmitter, &receiver, &reconnect);
+    printp(&reconnect);
+    callAfterSeconds(wakeup);
 }
+
 
 void handledata(fmtg *packet){
 
-    if(addrcmp(packet->dst, addr)){
-      Serial.println("destination mai raixu esko, playing on speaker");
-      for (int i =0; i<50; i++)
+    if(packet->dst == addr){
+      // Serial.println("destination mai raixu esko, playing on speaker");
+      Serial.println((char*)packet->payload);
+      ownEntry->irpc = 0;
+      ownEntry->ispc++;
+      if(ownEntry->ispc > 200)
       {
-        byte buff[16] = "Ringing";
-        fmtg data = construct_data_from_ack(*packet, buff);
-        data.hop = i;
-        unicast(&transmitter, &data);
-        delay(100);
-      }    // do someth8ihn with the data
+        ownEntry->ir = 0;
+      }
+        // do someth8ihn with the data
+        if(packet->payload[0] = 'R')
+        {
+          // Serial.println((char*)&packet->payload[1]);
+          if(currentState == CONNECTING)
+          {
+            repeat100ms(startRing);
+            currentState = RINGING;
+          }
+          
+        }
+        else if(currentState == INCALL && packet->payload[0] == 'V')
+        {
+          memcpy(speakerBuffer, &(packet->payload[1]), sizeof(speakerBuffer));
+          speaker = true;
+        }
+        else if(packet->payload[0] == 'A')
+        {
+          currentState = INCALL;
+          stop100ms();
+        } else if(packet->payload[0] == 'N')
+        {
+          currentState = TERMINATED;
+          stop100ms();
+          Serial.println("Uthayena phone muji");
+        }
     } else{
       Serial.println("data ta ho but destinatoin ma haina, relay garnu paryo, searching on routing table");
-        int index  = search(packet);
-        if(index > 0){
+      displayTable();
+       printp(packet);
+        int index = search(packet);
+        RoutingEntry *entry = &(routing_table[index]);
+        if(index >= 0){
           Serial.println("xa table ma");
-            if(addrcmp(routing_table[index].ir, "\0\0")){
-               broadcast_reconnect(*packet); 
-            } else if(addrcmp(routing_table[index].ir, "\0\0")){
+            if(routing_table[index].ir == 0){
+               broadcast_reconnect(packet); 
+            } else if(routing_table[index].is == 0){
                return;
             }
-            if(addrcmp(packet->src, routing_table[index].src)){
-                memcpy(packet->ir, routing_table[index].ir, ADDR_S);
+            if(packet->src == routing_table[index].src){
+                packet->ir = routing_table[index].ir;
+                routing_table[index].ispc = 0;
+                routing_table[index].irpc++;
+                if(routing_table[index].irpc && routing_table[index].irpc % 25 == 0)
+                {
+                  fmtg ping(entry->dst, entry->src, addr, entry->ir, P_DAT, channel, entry->irchannel);
+                  ping.attachPayload('P', "pinging", 8);
+                  printp(&ping);
+                  unicast(&transmitter, &ping);
+                }
+                if(routing_table[index].irpc > 2000)
+                {
+                  routing_table[index].is= 0;
+                }
             } else{
-                memcpy(packet->ir, routing_table[index].is, ADDR_S);
+                packet->ir = routing_table[index].is;
+                routing_table[index].irpc = 0;
+                routing_table[index].ispc++;
+                if(routing_table[index].ispc && routing_table[index].ispc % 25 == 0)
+                {
+                  fmtg ping(entry->src, entry->dst, addr, entry->is, P_DAT, channel, entry->ischannel);
+                  ping.attachPayload('P', "pinging", 8);
+                  printp(&ping);
+                  unicast(&transmitter, &ping);
+                }
+                if(routing_table[index].ispc > 2000)
+                {
+                  routing_table[0].ir = 0;
+                }
             }
-            memcpy(packet->is, addr, ADDR_S);
-            unicast(&receiver, packet);
+            packet->is = addr;
+            printp(packet);
+            unicast(&transmitter, packet);
         }
-        Serial.println("table ma xaina, not my business");
+        else Serial.println("table ma xaina, not my business");
     }
 }
 
 void broadcast_addr_case(fmtg *packet){
   Serial.println("received this packet on broadcast:");
-  printp(*packet);
-    if(addrcmp(packet->dst, addr) && packet->type == P_DISC){
+  printp(packet);
+    if(packet->dst == addr && packet->type == P_DISC){
         Serial.println("packet ko dest is me so sending ack");
         sendack(packet);
+        displayTable();
+        currentState == CONNECTING;
     } else{
         Serial.println("packet ko dest is not me, checking if it is rec pkt");
         if(packet->type == P_REC){
@@ -153,7 +275,7 @@ void broadcast_addr_case(fmtg *packet){
             handleReconnect(packet);
         } else{
             Serial.println("reconnect haina, yo dsicovery rebroadcast garnu paryo");
-            rebroadcast(*packet);
+            rebroadcast(packet);
         }
     }
 }
@@ -161,21 +283,42 @@ void broadcast_addr_case(fmtg *packet){
 void relayack(fmtg *packet){
   Serial.println("relay garnu paryo yo ack, chekcing routing table");
     int index = search(packet);
-    addrcpy(packet->ir, routing_table[index].is);
-    addrcpy(routing_table[index].ir, packet->is);
-    addrcpy(packet->is, addr);
+    Serial.println(index);
+    
+    packet->ir = routing_table[index].is;
+    routing_table[index].ir = packet->is;
+    packet->is = addr;
     Serial.println("relaying this ack:");
-    printp(*packet);
+    printp(packet);
+    displayTable();
     unicast(&transmitter, packet);
 }
 
+void startRing()
+{
+  static int i = 0;
+  if(i<3000)
+  {
+   ring = true;
+    i++;
+  } else {
+    currentState = TERMINATED;
+    stop100ms();
+    ring = false;
+  }
+
+}
 void own_addr_case(fmtg *packet){
-    Serial.println("unicast ack ho ki rec ho yo muji check garnu paryo");
+    // Serial.println("unicast ack ho ki rec ho yo muji check garnu paryo");
     if(packet->type == P_ACK){
       Serial.println("ack raixa");
-        if(addrcmp(packet->dst, addr)){
-            Serial.println("Got an ack from the recepient");
-            printp(*packet);
+        if(currentState == CONNECTING && packet->dst == addr){
+            Serial.println("Got an ack from the recepient. Start ringing");
+            ownEntry->ir = packet->is;
+            ownEntry->irchannel = packet->ischannel;
+            displayTable();
+            currentState = RINGING;
+            repeat100ms(startRing);
         } else{
           Serial.println("destination ma haina raixa");
             relayack(packet);
@@ -183,31 +326,85 @@ void own_addr_case(fmtg *packet){
     } else if(packet->type ==  P_REC){
         Serial.println("rec raixa muji");
         int index = search(packet);
-        if(addrcmp(routing_table[index].ir, "\0\0")){
-            addrcpy(routing_table[index].ir, packet->is);
+        if(routing_table[index].ir = 0){
+            routing_table[index].ir = packet->is;
             Serial.println("feri paht banyo muji");
         } else{
             relayack(packet);
         }
 
     } else{
-        Serial.println("rec ni haina ack ni haina, data po raixa muji");
+        // Serial.println("rec ni haina ack ni haina, data po raixa muji");
         handledata(packet);
     }
 }
 
 void loop(){
     fmtg packet;
-    uint8_t pipe;
+    static int i = 0;
+    byte buff[16] = "Ringing";
 
-    if(receiver.available(&pipe)){
-        Serial.println("Receiver Available, reading packet");
+
+    if(currentState == IDLE && calling)
+    {
+       fmtg discovery(addr, contacts[dialpad], addr, BROADCAST_ADDR, P_DISC, channel, 0);
+       *ownEntry = RoutingEntry(&discovery);
+        broadcast(&transmitter, &receiver, &discovery);
+        currentState = CONNECTING;
+        Serial.print("Calling number : "); Serial.println(contacts[dialpad], HEX);
+        printp(&discovery);
+        calling = false;
+    }
+    switch(currentState)
+    {
+      case RINGING:
+        fmtg ringpacket(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
+        ringpacket.attachPayload('R', buff, sizeof(buff));
+        if(ring)
+        {
+          unicast(&transmitter, &ringpacket);
+          ownEntry->ispc = 0;
+          ownEntry->irpc++;
+          // displayTable();
+          if(ownEntry->irpc > 200)
+          {
+            Serial.println("fuck");
+            routing_table[0].ir = 0;
+            broadcast_reconnect(&ringpacket);
+          }
+          // printp(ringpacket);
+          ring = false;
+        }
+        if(reject)
+        {
+          stop100ms();
+          currentState = TERMINATED;
+          fmtg accept(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
+          accept.attachPayload('N', "i reject", 9);
+          unicast(&transmitter, &accept);
+          printp(&accept);
+          reject = false;
+        }
+        break;
+      case INCALL:
+        if(mic)
+        {
+          ringpacket.attachPayload('V', micBuffer, sizeof(micBuffer));
+          unicast(&transmitter, &ringpacket);
+          mic = false;
+        }
+        break;
+
+    }
+
+    if(receiver.available()){
+        // Serial.println("Receiver Available, reading packet");
         receiver.read(&packet, sizeof(packet));
-        if(pipe){
+        if(packet.ir == BROADCAST_ADDR){
             Serial.println("pipe 1 (broadcast) ma aayo");
             broadcast_addr_case(&packet);
-        } else{
-            Serial.println("pipe 0 (unicast) ma aayo");
+        } else if(packet.ir == addr){
+            // Serial.println("pipe 0 (unicast) ma aayo");
             own_addr_case(&packet);
         }
     }
