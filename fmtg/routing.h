@@ -26,6 +26,8 @@ int duplicate(fmtg *packet);
 
 void insertEntry(fmtg *packet);
 
+void deleteEntry(int index);
+
 void displayTable();
 
 int search(fmtg *packet);

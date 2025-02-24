@@ -21,4 +21,6 @@ void repeat(void (*func)(), unsigned long intervalMicros);
 void repeat100ms(void (*func)());
 
 void stop100ms();
+
+void stopRepeat();
 #endif

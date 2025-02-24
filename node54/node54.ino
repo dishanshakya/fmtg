@@ -4,29 +4,45 @@
 #include <utils.h>
 #include <routing.h>
 #include <ecc.h>
+// #include <TimerOne.h>
 
-RF24 transmitter(2,3);
-RF24 receiver(5,4);
+RF24 transmitter(5,6);
+RF24 receiver(7,8);
 
 state_t currentState = IDLE;
 
 volatile uint8_t dialpad = 0;
-volatile bool ring = false, calling = false, reject = false, mic = false, speaker = false;
-uint8_t channel = 10;
+volatile bool ring = false, calling = false, accept = false,
+   reject = false, mic = false, speaker = false, end = false;
+uint8_t channel = 20;
 volatile byte micBuffer[16], speakerBuffer[16];
+uint16_t contacts[4] = {0x1111, 0x2222, 0x3333, 0x4444};
 
 void dialer()
 {
   noInterrupts();
-  if(currentState == IDLE)
+  static unsigned long time = 0;
+  if(millis() - time > 500)
   {
-    dialpad = (dialpad+1)%4;
-    digitalWrite(0, dialpad&1);
-    digitalWrite(1, dialpad&2);
-  }
-  else if(currentState == INCALL || currentState == RINGING){
-    Serial.println("stop the call");
-    reject = true;
+    if(currentState == IDLE)
+    {
+      dialpad = (dialpad+1)%4;
+      digitalWrite(0, dialpad&1);
+      digitalWrite(1, dialpad&2);
+      Serial.println(contacts[dialpad], HEX);
+    }
+     else if(currentState == RINGING){
+      Serial.println("stop the call");
+      reject = true;
+      // Serial.println(reject);
+    }
+    else if(currentState == INCALL)
+    {
+      end = true;
+      Serial.println("end call");
+    }
+    time = millis();
+
   }
   interrupts();
 }
@@ -34,29 +50,42 @@ void dialer()
 void caller()
 {
   noInterrupts();
-  if(currentState == IDLE)
+  static unsigned long time = 0;
+  if(millis() - time > 500)
   {
-    //start discovery
-  }
-  else if(currentState == RINGING)
-  {
-    //accept call
-    currentState = INCALL;
-    
+    if(currentState == IDLE)
+    {
+      //start discovery
+      if(contacts[dialpad] != addr)
+      {
+        calling = true;
+        Serial.println("ok");
+      }
+        
+      else Serial.println("own number?");
+    }
+    else if(currentState == RINGING)
+    {
+      //accept call
+      currentState = INCALL;
+      accept = true;
+      
+    }
+    time = millis();
   }
   interrupts();
 }
 
 void sample()
 {
-  static int i=0;
-  if(i < 16)
+  static int i=0, x = 0;
+  if(i < 16 && !mic)
   {
+    micBuffer[i] = 'g';
     if(speaker)
     {
-
     }
-
+    i++;
   }else {
     i = 0;
     mic = true;
@@ -97,7 +126,7 @@ void setup(){
     transmitter.printPrettyDetails();
     receiver.printPrettyDetails();
 
-    calling = true;
+    // calling = true;
 }
 
 void handleReconnect(fmtg *packet){
@@ -153,12 +182,12 @@ void broadcast_reconnect(fmtg *packet){
     callAfterSeconds(wakeup);
 }
 
-void sample(){};
 
 void handledata(fmtg *packet){
 
     if(packet->dst == addr){
       // Serial.println("destination mai raixu esko, playing on speaker");
+      Serial.println((char*)packet->payload);
       ownEntry->irpc = 0;
       ownEntry->ispc++;
       if(ownEntry->ispc > 200)
@@ -166,7 +195,7 @@ void handledata(fmtg *packet){
         ownEntry->ir = 0;
       }
         // do someth8ihn with the data
-        if(packet->payload[0] = 'R')
+        if(packet->payload[0] =='R')
         {
           // Serial.println((char*)&packet->payload[1]);
           if(currentState == CONNECTING)
@@ -181,13 +210,21 @@ void handledata(fmtg *packet){
           memcpy(speakerBuffer, &(packet->payload[1]), sizeof(speakerBuffer));
           speaker = true;
         }
-        else if(packet->payload[0] == 'A')
+        else if(currentState == INCALL && packet->payload[0] == 'T')
         {
-          currentState = INCALL;
+          stopRepeat();
+          deleteEntry(0);
+          Serial.println("call ended");
+          currentState = IDLE;
+        }
+        else if(currentState == RINGING && packet->payload[0] == 'A')
+        {
+          Serial.println("call uthayo");
           stop100ms();
+          accept = true;
         } else if(packet->payload[0] == 'N')
         {
-          currentState = TERMINATED;
+          currentState = IDLE;
           stop100ms();
           Serial.println("Uthayena phone muji");
         }
@@ -246,7 +283,7 @@ void handledata(fmtg *packet){
 void broadcast_addr_case(fmtg *packet){
   Serial.println("received this packet on broadcast:");
   printp(packet);
-    if(packet->dst == addr && packet->type == P_DISC){
+    if(currentState == IDLE && packet->dst == addr && packet->type == P_DISC){
         Serial.println("packet ko dest is me so sending ack");
         sendack(packet);
         displayTable();
@@ -284,8 +321,9 @@ void startRing()
   {
    ring = true;
     i++;
+
   } else {
-    currentState = TERMINATED;
+    currentState = IDLE;
     stop100ms();
     ring = false;
   }
@@ -323,23 +361,24 @@ void own_addr_case(fmtg *packet){
 }
 
 void loop(){
-    fmtg packet, ringpacket;
+    fmtg packet;
     static int i = 0;
     byte buff[16] = "Ringing";
-
+    // Serial.println(currentState);
+    // if(calling) Serial.println("working");
     if(currentState == IDLE && calling)
     {
-       fmtg discovery(addr, addr_n2, addr, BROADCAST_ADDR, P_DISC, channel, 0);
+      Serial.println(currentState);
+       fmtg discovery(addr, contacts[dialpad], addr, BROADCAST_ADDR, P_DISC, channel, 0);
        *ownEntry = RoutingEntry(&discovery);
         broadcast(&transmitter, &receiver, &discovery);
         currentState = CONNECTING;
+        Serial.print("Calling number : "); Serial.println(contacts[dialpad], HEX);
+        printp(&discovery);
         calling = false;
     }
-    switch(currentState)
-    {
-      fmtg ringpacket(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
-      case RINGING:
-        
+      if(currentState == RINGING){
+        fmtg ringpacket(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
         ringpacket.attachPayload('R', buff, sizeof(buff));
         if(ring)
         {
@@ -347,7 +386,6 @@ void loop(){
           ownEntry->ispc = 0;
           ownEntry->irpc++;
           // displayTable();
-          Serial.println(ownEntry->irpc);
           if(ownEntry->irpc > 200)
           {
             Serial.println("fuck");
@@ -360,23 +398,48 @@ void loop(){
         if(reject)
         {
           stop100ms();
-          currentState = TERMINATED;
-          fmtg accept(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
-          accept.attachPayload('N', "i reject", 9);
-          unicast(&transmitter, &accept);
+          currentState = IDLE;
+          fmtg rejection(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
+          rejection.attachPayload('N', "i reject", 9);
+          unicast(&transmitter, &rejection);
+          printp(&rejection);
           reject = false;
         }
-        break;
-      case INCALL:
+        else if (accept)
+        {
+          fmtg acceptance(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
+          acceptance.attachPayload('A', "i accept", 9);
+          unicast(&transmitter, &acceptance);
+          printp(&acceptance);
+          accept = false;
+          currentState = INCALL;
+          // Timer1.initialize(250);
+          // Timer1.attachInterrupt(sample);
+
+          repeat(sample, 2000);
+        }
+      }
+      else if(currentState == INCALL){
         if(mic)
         {
-          ringpacket.attachPayload('V', micBuffer, sizeof(micBuffer));
-          unicast(&transmitter, &ringpacket);
+          fmtg voicepacket(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
+          voicepacket.attachPayload('V', micBuffer, sizeof(micBuffer));
+          unicast(&transmitter, &voicepacket);
           mic = false;
         }
+        if(end)
+        {
+          stopRepeat();
+          Serial.println("call ended");
+          fmtg terminate(addr, ownEntry->dst, addr, ownEntry->ir, P_DAT, channel, ownEntry->irchannel);
+          terminate.attachPayload('T', "finish call", sizeof(12));
+          unicast(&transmitter, &terminate);
+          currentState = IDLE;
+          deleteEntry(0);
+          end = false;
 
-    }
-
+        }
+      }
     if(receiver.available()){
         // Serial.println("Receiver Available, reading packet");
         receiver.read(&packet, sizeof(packet));

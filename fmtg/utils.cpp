@@ -22,7 +22,7 @@ void broadcast(RF24 *transmitter, RF24 *receiver, fmtg *packet){
     for(int i=1; i<4; i++)
     {
 	    transmitter->setChannel(i * 10);
-	    transmitter->write(packet, sizeof(fmtg));
+	    transmitter->writeFast(packet, sizeof(fmtg));
     }
     interrupts();
 }
@@ -94,14 +94,14 @@ void repeat(void (*func)(), unsigned long freq) {
 
   TCCR2A = (1 << WGM21);
 
-  TCCR2B = (1 << CS22) | (1 << CS21) | (1 << CS20);
+  TCCR2B =  (1 << CS21) ;
 
   unsigned long clockFrequency = 16000000;
-  unsigned long prescaler = 1024;
+  unsigned long prescaler = 8;
 
   OCR2A = clockFrequency/(prescaler*freq)-1;
 
-  TIMSK2 |= (1 << OCIE2A);
+  TIMSK2 = (1 << OCIE2A);
 
   sei();
 }
@@ -112,12 +112,16 @@ void repeat100ms(void (*func)()) {
 	count = 6;
 	TCCR2A = 0;
 	TCCR2B = (1 << CS22) | (1 << CS21) | (1 << CS20);
-	TIMSK2 |= (1 << TOIE2);
+	TIMSK2 = (1 << TOIE2);
 	sei();
 }
 
 void stop100ms(){
 	TIMSK2 &= ~(1 << TOIE2);
+}
+
+void stopRepeat(){
+	TIMSK2 &= ~(1 << OCIE2A);
 }
 	
 

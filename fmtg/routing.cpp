@@ -72,6 +72,11 @@ void insertEntry(fmtg *packet) {
     Serial.println("full");
     displayTable();
 }
+
+void deleteEntry(int index){
+	memset(&(routing_table[index]), 0, sizeof(RoutingEntry));
+}
+
 void displayTable() {
     Serial.println("\nRouting Table:");
     Serial.println("---------------------------------");
